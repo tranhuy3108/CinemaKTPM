@@ -1,3 +1,10 @@
+<?php
+// Kiểm tra đăng nhập trước khi thanh toán
+if (!isset($_SESSION['user'])) {
+    header("Location: /public/index.php?action=login");
+    exit;
+}
+?>
 <!DOCTYPE html>
 <html lang="vi">
 <?php

@@ -1,12 +1,15 @@
 <?php
 
 /** @var AdminController $adminController */
+if (!isset($adminController)) {
+    throw new Exception('AdminController is required');
+}
 
 // Lấy các tham số filter
 $currentPage = isset($_GET['p']) ? max(1, (int)$_GET['p']) : 1;
 $limit = 10;
-$statusFilter = $_GET['status'] ?? null;
-$search = $_GET['search'] ?? null;
+$statusFilter = isset($_GET['status']) ? $_GET['status'] : null;
+$search = isset($_GET['search']) ? $_GET['search'] : null;
 
 // Lấy dữ liệu từ controller
 $billsData = $adminController->getBillsPaginated($currentPage, $limit, $statusFilter, $search);
@@ -31,7 +34,7 @@ function getStatusClass($status)
         'cancelled' => 'status-Cancelled',
         'refunded' => 'status-Refunded'
     ];
-    return $classes[$status] ?? 'status-Pending';
+    return isset($classes[$status]) ? $classes[$status] : 'status-Pending';
 }
 
 // Helper function để lấy tên hiển thị cho status
@@ -43,7 +46,7 @@ function getStatusLabel($status)
         'cancelled' => 'Đã hủy',
         'refunded' => 'Đã hoàn tiền'
     ];
-    return $labels[$status] ?? $status;
+    return isset($labels[$status]) ? $labels[$status] : $status;
 }
 ?>
 
@@ -60,7 +63,7 @@ function getStatusLabel($status)
                 'confirmed' => 'Xác nhận thanh toán thành công!',
                 'cancelled' => 'Hủy đơn hàng thành công!'
             ];
-            $successMsg = $successMessages[$_GET['success']] ?? 'Thao tác thành công!';
+            $successMsg = isset($successMessages[$_GET['success']]) ? $successMessages[$_GET['success']] : 'Thao tác thành công!';
             echo htmlspecialchars($successMsg);
             ?>
         </div>
@@ -141,7 +144,7 @@ function getStatusLabel($status)
                     <input type="hidden" name="page" value="bookings">
 
                     <input type="text" name="search" placeholder="Nhập mã đơn, tên, email..."
-                        value="<?= htmlspecialchars($search ?? '') ?>" style="width: 250px;">
+                        value="<?= htmlspecialchars(isset($search) ? $search : '') ?>" style="width: 250px;">
 
                     <select name="status" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #333; background: #1a1a2e; color: #fff;">
                         <option value="">Tất cả trạng thái</option>

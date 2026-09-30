@@ -135,6 +135,10 @@ class Ticket
             JOIN cinemas c ON c.cinema_id = h.cinema_id
             WHERE t.bill_id = ?";
         $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            error_log("SQL Error in getTicketsByBillId: " . $this->conn->error);
+            return [];
+        }
         $stmt->bind_param("i", $billId);
         $stmt->execute();
         $result = $stmt->get_result();

@@ -61,9 +61,20 @@ class AuthController
             $_SESSION['user'] = $user;
             $_SESSION['permissions'] = array_column($permissions, 'permission_code'); // Lưu mã quyền vào session
 
-            // Redirect theo role
+            // Kiểm tra redirect URL (cho booking flow)
+            $redirectUrl = isset($_POST['redirect']) ? $_POST['redirect'] : (isset($_GET['redirect']) ? $_GET['redirect'] : '');
+            
+            // Redirect theo role hoặc redirect URL
             if ($user['role_id'] == 1) {
                 header('Location: ../views/admin/index.php');
+            } elseif (!empty($redirectUrl)) {
+                // Đảm bảo redirect URL an toàn (chỉ cho phép redirect nội bộ)
+                $redirectUrl = urldecode($redirectUrl);
+                if (strpos($redirectUrl, '/') === 0 || strpos($redirectUrl, 'index.php') !== false) {
+                    header('Location: ' . $redirectUrl);
+                } else {
+                    header('Location: ../views/user/index.php');
+                }
             } else {
                 header('Location: ../views/user/index.php');
             }

@@ -4,7 +4,7 @@ function getDBConnection()
     $host     = "localhost";   // hoặc localhost
     $port     = 3306;          // port MySQL của bạn
     $username = "root";
-    $password = "12345";
+    $password = "";
     $dbname   = "cinemax";
 
     try {

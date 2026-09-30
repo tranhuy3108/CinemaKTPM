@@ -1,4 +1,10 @@
 <?php
+// Kiểm tra đăng nhập trước khi đặt vé
+if (!isset($_SESSION['user'])) {
+    header("Location: /public/index.php?action=login");
+    exit;
+}
+
 require_once __DIR__ . '/../../../config/dbConfig.php';
 require_once __DIR__ . '/../../../models/FoodCombo.php';
 require_once __DIR__ . '/../../../services/FoodComboService.php';

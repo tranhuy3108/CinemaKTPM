@@ -1,4 +1,11 @@
 <?php
+// Kiểm tra đăng nhập trước khi đặt vé
+if (!isset($_SESSION['user'])) {
+    $redirect_url = urlencode($_SERVER['REQUEST_URI']);
+    header("Location: /public/index.php?action=login&redirect=" . $redirect_url);
+    exit;
+}
+
 $show_id = isset($_GET['show_id']) ? (int)$_GET['show_id'] : 0;
 
 if ($show_id <= 0) {

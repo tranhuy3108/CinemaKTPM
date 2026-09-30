@@ -35,6 +35,12 @@
                 </div>
             <?php endif; ?>
 
+            <?php if (isset($_GET['redirect']) && strpos($_GET['redirect'], 'seat_selection') !== false): ?>
+                <div class="alert alert-info" style="background: #1a3a5c; border-left: 4px solid #3498db; color: #fff; padding: 12px 16px; margin-bottom: 20px; border-radius: 4px;">
+                    Vui lòng đăng nhập để tiếp tục đặt vé xem phim.
+                </div>
+            <?php endif; ?>
+
             <?php if (isset($_GET['success']) && $_GET['success'] == 'registered'): ?>
                 <div class="alert alert-success">
                     Đăng ký tài khoản thành công! Vui lòng đăng nhập.
@@ -42,6 +48,9 @@
             <?php endif; ?>
 
             <form id="loginForm" class="auth-form" action="../../public/index.php?action=login" method="POST">
+                <?php if (isset($_GET['redirect'])): ?>
+                <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($_GET['redirect']); ?>">
+                <?php endif; ?>
                 <div class="form-group">
                     <label for="email">Email</label>
                     <input type="email" id="email" name="email" placeholder="name@example.com" required>
