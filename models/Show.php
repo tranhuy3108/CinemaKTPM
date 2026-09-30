@@ -65,9 +65,11 @@ class Show
 
     public function createShow($movie_id, $hall_id, $show_date, $start_time, $end_time, $base_price)
     {
+        // Suất chiếu mới tạo được mở bán ngay để User nhìn thấy và đặt vé.
+        // Trạng thái 0 = Chưa mở bán, 1 = Đang mở bán, -1 = Đã kết thúc.
         $sql = "INSERT INTO shows 
             (movie_id, hall_id, show_date, start_time, end_time, base_price, status) 
-            VALUES (?, ?, ?, ?, ?, ?, 0)";
+            VALUES (?, ?, ?, ?, ?, ?, 1)";
 
         $stmt = $this->conn->prepare($sql);
 
