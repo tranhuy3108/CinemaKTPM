@@ -1,10 +1,17 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <?php
-//Ket noi db
+
+// =========================================================
+// DATABASE
+// =========================================================
 require_once __DIR__ . '/../../config/dbConfig.php';
 
-//Cac file models
+
+// =========================================================
+// MODELS
+// =========================================================
 require_once __DIR__ . '/../../models/Movie.php';
 require_once __DIR__ . '/../../models/Genre.php';
 require_once __DIR__ . '/../../models/Promotion.php';
@@ -14,8 +21,9 @@ require_once __DIR__ . '/../../models/Bill.php';
 require_once __DIR__ . '/../../models/User.php';
 
 
-
-//Cac file service
+// =========================================================
+// SERVICES
+// =========================================================
 require_once __DIR__ . '/../../services/AuthMiddleware.php';
 require_once __DIR__ . '/../../services/MovieService.php';
 require_once __DIR__ . '/../../services/PromotionService.php';
@@ -23,20 +31,40 @@ require_once __DIR__ . '/../../services/ShowService.php';
 require_once __DIR__ . '/../../services/TicketService.php';
 require_once __DIR__ . '/../../services/BillService.php';
 require_once __DIR__ . '/../../services/UserService.php';
-//Cac file controller
+
+
+// =========================================================
+// CONTROLLERS
+// =========================================================
 require_once __DIR__ . '/../../controllers/ShowController.php';
 require_once __DIR__ . '/../../controllers/UserController.php';
 
-session_start();
+
+// =========================================================
+// SESSION
+// =========================================================
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 
-// Lấy thông tin user từ JWT (null nếu chưa đăng nhập - user trang chủ không bắt buộc login)
+// =========================================================
+// AUTH
+// =========================================================
+// User trang chủ không bắt buộc đăng nhập.
+// Chỉ lấy thông tin nếu đã đăng nhập.
 $authUser = AuthMiddleware::getAuthUser();
 
-//Ket noi db
+
+// =========================================================
+// DATABASE CONNECTION
+// =========================================================
 $conn = getDbConnection();
 
-//Khoi tao models
+
+// =========================================================
+// KHỞI TẠO MODELS
+// =========================================================
 $movieModel = new Movie($conn);
 $genreModel = new Genre($conn);
 $promotionModel = new Promotion($conn);
@@ -45,37 +73,66 @@ $ticketModel = new Ticket($conn);
 $billModel = new Bill($conn);
 $userModel = new User($conn);
 
-//Khoi tao services
+
+// =========================================================
+// KHỞI TẠO SERVICES
+// =========================================================
 $promotionService = new PromotionService($promotionModel);
-$movieService = new MovieService($movieModel, $genreModel);
-$ticketService = new TicketService($ticketModel);
-$showService = new ShowService($showModel, $ticketService);
-$billService = new BillService($billModel, $ticketService);
-$userService = new UserService($userModel);
+
+$movieService = new MovieService(
+        $movieModel,
+        $genreModel
+);
+
+$ticketService = new TicketService(
+        $ticketModel
+);
+
+$showService = new ShowService(
+        $showModel,
+        $ticketService
+);
+
+$billService = new BillService(
+        $billModel,
+        $ticketService
+);
+
+$userService = new UserService(
+        $userModel
+);
 
 
+// =========================================================
+// KHỞI TẠO CONTROLLERS
+// =========================================================
+$showController = new ShowController(
+        $showService
+);
 
-//Khoi tao controller
-$showController = new ShowController($showService);
-$userController = new UserController($userService, $billService);
+$userController = new UserController(
+        $userService,
+        $billService
+);
 
 
-
-
-// Danh sách page hợp lệ (tránh hack ?content=../../)
+// =========================================================
+// PAGE WHITELIST
+// =========================================================
+// Chỉ cho phép các page nằm trong danh sách này.
 $allowedPages = [
-    'home',
-    'movie_detail',
-    'theaters',
-    'movies',
-    'promotions',
-    'showtimes',
-    'seat_selection',
-    'food_selection',
-    'payment',
-    'booking_success',
-    'my_bookings',
-    '404'
+        'home',
+        'movie_detail',
+        'theaters',
+        'movies',
+        'promotions',
+        'showtimes',
+        'seat_selection',
+        'food_selection',
+        'payment',
+        'booking_success',
+        'my_bookings',
+        '404'
 ];
 
 $page = $_GET['page'] ?? 'home';
@@ -85,97 +142,238 @@ if (!in_array($page, $allowedPages, true)) {
     $page = '404';
 }
 
-if ($page === 'payment' && $action) {
-    switch ($action) {
-        case 'confirm_payment':
 
-            $ticketIds = isset($_POST['ticket_ids']) && is_array($_POST['ticket_ids'])
-                ? array_values(array_filter(array_map('intval', $_POST['ticket_ids'])))
-                : [];
+// =========================================================
+// CONFIRM PAYMENT / CREATE BOOKING
+// =========================================================
+//
+// Flow:
+//
+// seat_selection
+//      ↓
+// food_selection
+//      ↓
+// payment
+//      ↓
+// confirm_payment
+//      ↓
+// BillService::createBooking()
+//      ↓
+// Server kiểm tra ghế + giá vé + combo
+//      ↓
+// Tạo bill pending
+//      ↓
+// Giữ ghế booked
+//      ↓
+// Lưu combo
+//      ↓
+// booking_success
+//
+// QUAN TRỌNG:
+// Không sử dụng grand_total từ browser.
+// Không sử dụng price combo từ browser.
+// Không sử dụng price ticket từ browser.
+// =========================================================
 
-            $grandTotal  = isset($_POST['grand_total']) ? (float)$_POST['grand_total'] : 0;
-            $showtimeId  = isset($_POST['showtime_id']) ? (int)$_POST['showtime_id'] : 0;
-            $userId      = $authUser['user_id'] ?? 0;
+if ($page === 'payment' && $action === 'confirm_payment') {
 
-            // 🔥 LẤY COMBO
-            $selectedCombos = isset($_POST['combos']) ? $_POST['combos'] : [];
+    // -----------------------------------------------------
+    // User hiện tại
+    // -----------------------------------------------------
+    $userId = isset($authUser['user_id'])
+            ? (int)$authUser['user_id']
+            : 0;
 
-            if (empty($ticketIds) || $userId <= 0) {
-                header('Location: index.php?page=payment&error=invalid');
-                exit;
-            }
 
-            try {
-                $conn->begin_transaction();
+    // -----------------------------------------------------
+    // Show ID
+    // -----------------------------------------------------
+    $showtimeId = isset($_POST['showtime_id'])
+            ? (int)$_POST['showtime_id']
+            : 0;
 
-                // 1. Tạo bill
-                $sqlBill = "INSERT INTO bills (user_id, total_tickets, total_amount, final_amount, status)
-                    VALUES (?, ?, ?, ?, 'pending')";
-                $stmtBill = $conn->prepare($sqlBill);
 
-                $totalTickets = count($ticketIds);
-                $stmtBill->bind_param('iidd', $userId, $totalTickets, $grandTotal, $grandTotal);
-                $stmtBill->execute();
+    // -----------------------------------------------------
+    // Ticket IDs
+    // -----------------------------------------------------
+    $ticketIds = [];
 
-                $billId = $conn->insert_id;
+    if (
+            isset($_POST['ticket_ids'])
+            && is_array($_POST['ticket_ids'])
+    ) {
+        $ticketIds = array_values(
+                array_unique(
+                        array_filter(
+                                array_map(
+                                        'intval',
+                                        $_POST['ticket_ids']
+                                ),
+                                function ($id) {
+                                    return $id > 0;
+                                }
+                        )
+                )
+        );
+    }
 
-                // 2. Update tickets
-                $sqlUpdate = "UPDATE tickets SET bill_id = ?, status = 'booked' 
-                      WHERE ticket_id = ? AND status = 'available'";
-                $stmtUpdate = $conn->prepare($sqlUpdate);
 
-                foreach ($ticketIds as $tid) {
-                    $stmtUpdate->bind_param('ii', $billId, $tid);
-                    $stmtUpdate->execute();
-                }
+    // -----------------------------------------------------
+    // Combo
+    // -----------------------------------------------------
+    $selectedCombos = [];
 
-                // 🔥 3. INSERT BILL_COMBOS
-                if (!empty($selectedCombos)) {
+    if (
+            isset($_POST['combos'])
+            && is_array($_POST['combos'])
+    ) {
+        $selectedCombos = $_POST['combos'];
+    }
 
-                    $sqlCombo = "INSERT INTO bill_combos (bill_id, combo_id, quantity, price)
-                         VALUES (?, ?, ?, ?)";
 
-                    $stmtCombo = $conn->prepare($sqlCombo);
+    // -----------------------------------------------------
+    // Kiểm tra đăng nhập
+    // -----------------------------------------------------
+    if ($userId <= 0) {
 
-                    foreach ($selectedCombos as $combo) {
-                        $comboId  = (int)$combo['combo_id'];
-                        $quantity = (int)$combo['quantity'];
-                        $price    = (float)$combo['price'];
+        header(
+                'Location: index.php?page=payment&error=login_required'
+        );
 
-                        if ($comboId > 0 && $quantity > 0) {
-                            $stmtCombo->bind_param('iiid', $billId, $comboId, $quantity, $price);
-                            $stmtCombo->execute();
-                        }
-                    }
-                }
+        exit;
+    }
 
-                $conn->commit();
 
-                header('Location: index.php?page=booking_success&bill_id=' . $billId);
-                exit;
-            } catch (Exception $e) {
-                $conn->rollback();
-                header('Location: index.php?page=payment&error=' . urlencode($e->getMessage()));
-                exit;
-            }
+    // -----------------------------------------------------
+    // Kiểm tra show
+    // -----------------------------------------------------
+    if ($showtimeId <= 0) {
+
+        header(
+                'Location: index.php?page=showtimes&error=invalid_show'
+        );
+
+        exit;
+    }
+
+
+    // -----------------------------------------------------
+    // Kiểm tra ticket
+    // -----------------------------------------------------
+    if (empty($ticketIds)) {
+
+        header(
+                'Location: index.php?page=seat_selection&show_id=' .
+                $showtimeId .
+                '&error=no_seats'
+        );
+
+        exit;
+    }
+
+
+    // -----------------------------------------------------
+    // CREATE BOOKING
+    // -----------------------------------------------------
+    try {
+
+        /**
+         * BillService sẽ:
+         *
+         * 1. Kiểm tra show.
+         * 2. Kiểm tra show chưa bắt đầu.
+         * 3. Lock ticket bằng FOR UPDATE.
+         * 4. Kiểm tra ticket thuộc đúng show.
+         * 5. Kiểm tra ticket còn available.
+         * 6. Lấy giá vé từ DB.
+         * 7. Lấy giá combo từ DB.
+         * 8. Tự tính tổng tiền.
+         * 9. Tạo bill pending.
+         * 10. Chuyển ticket sang booked.
+         * 11. Lưu bill_combos.
+         * 12. Commit transaction.
+         */
+        $booking = $billService->createBooking(
+                $userId,
+                $showtimeId,
+                $ticketIds,
+                $selectedCombos
+        );
+
+
+        // -------------------------------------------------
+        // Lấy Bill ID
+        // -------------------------------------------------
+        $billId = (int)$booking['bill_id'];
+
+
+        // -------------------------------------------------
+        // Thành công
+        // -------------------------------------------------
+        header(
+                'Location: index.php?page=booking_success&bill_id=' .
+                $billId
+        );
+
+        exit;
+
+    } catch (Throwable $e) {
+
+        /**
+         * createBooking() đã tự rollback transaction
+         * khi xảy ra lỗi.
+         *
+         * Ở đây chỉ xử lý redirect.
+         */
+
+        $errorMessage = $e->getMessage();
+
+        if ($errorMessage === '') {
+            $errorMessage = 'Không thể tạo đơn hàng.';
+        }
+
+
+        // -------------------------------------------------
+        // Trở lại payment
+        // -------------------------------------------------
+        header(
+                'Location: index.php?page=payment&error=' .
+                urlencode($errorMessage)
+        );
+
+        exit;
     }
 }
 
+
+// =========================================================
+// LOAD PAGE
+// =========================================================
 $contentPath = __DIR__ . "/pages/$page.php";
+
 ?>
 
 <head>
+
     <?php include __DIR__ . '/partials/head.php'; ?>
+
 </head>
 
+
 <body>
-    <?php include __DIR__ . '/partials/header.php'; ?>
 
-    <main>
-        <?php include $contentPath; ?>
-    </main>
+<?php include __DIR__ . '/partials/header.php'; ?>
 
-    <?php include __DIR__ . '/partials/footer.php'; ?>
+
+<main>
+
+    <?php include $contentPath; ?>
+
+</main>
+
+
+<?php include __DIR__ . '/partials/footer.php'; ?>
+
 </body>
 
 </html>
